@@ -3,18 +3,21 @@ import collections, typing
 class AleHeading(collections.UserDict):
 	"""ALE Heading Data"""
 
-	keyword = "Heading"
+	KEYWORD = "Heading"
+	"""ALE Keyword signifying the beginning of the heading data"""
+
+	DEFAULT_FILM = {
+		"FIELD_DELIM":"TABS",
+		"VIDEO_FORMAT":"1080",
+		"FILM_FORMAT":"35mm, 4 perf",
+		"AUDIO_FORMAT":"48khz",
+		"FPS":"24"
+	}
 
 	@classmethod
 	def default_heading(cls):
 
-		return cls({
-			"FIELD_DELIM":"TABS",
-			"VIDEO_FORMAT":"1080",
-			"FILM_FORMAT":"35mm, 4 perf",
-			"AUDIO_FORMAT":"48khz",
-			"FPS":"24"
-		})
+		return cls(cls.DEFAULT_FILM)
 	
 	@classmethod
 	def _from_parser(cls, parser:typing.Iterable):
@@ -35,7 +38,7 @@ class AleHeading(collections.UserDict):
 		return ale_heading
 	
 	def __str__(self) -> str:
-		output = self.keyword + "\n"
+		output = self.KEYWORD + "\n"
 		output += '\n'.join(key + '\t' + val for key,val in self.items())
 		output += "\n"
 		return output
@@ -44,7 +47,8 @@ class AleHeading(collections.UserDict):
 class AleColumns(collections.UserList):
 	"""ALE Column Headers"""
 
-	keyword = "Column"
+	KEYWORD = "Column"
+	"""ALE Keyword signifying the beginning of the column headers definition"""
 
 	@classmethod
 	def default_columns(cls):
@@ -73,14 +77,17 @@ class AleColumns(collections.UserList):
 		return ale_columns
 	
 	def __str__(self) -> str:
-		output = self.keyword + "\n"
+		output = self.KEYWORD + "\n"
 		output += "\t".join(str(col) for col in self) + "\t"
 		output += "\n"
 		return output
 
 
 class AleEvents(collections.UserList):
-	"""A list of ALE events (or, maybe: events)"""
+	"""A list of ALE events"""
+
+	KEYWORD = "Data"
+	"""ALE Keyword signifying the beginning of the events list"""
 
 	def __init__(self, events, columns:typing.Optional[AleColumns]=None):
 
@@ -128,9 +135,7 @@ class AleEvents(collections.UserList):
 		return cls(ale_events, columns=columns)
 	
 	def __iter__(self):
-		yield [
-			{col: str(event[idx]) for idx, col in enumerate(self.columns)} for event in self.data
-		]
+		return iter({col: str(event[idx]) for idx, col in enumerate(self.columns)} for event in self.data)
 
 class Ale:
 	"""An Avid Log Exchange"""
@@ -171,17 +176,19 @@ class Ale:
 
 		for idx, line in parser:
 			
-			if line == AleHeading.keyword:
+			if line == AleHeading.KEYWORD:
 				if ale_heading:
 					raise ValueError(f"Encountered duplicate Header definition on line {idx+1}")
 				ale_heading = AleHeading._from_parser(parser)
 			
-			elif line == AleColumns.keyword:
+			elif line == AleColumns.KEYWORD:
 				if not ale_heading:
 					raise ValueError(f"Encountered Column definition before Heading on line {idx+1}")
 				ale_columns = AleColumns._from_parser(parser)
 			
-			elif ale_heading and ale_columns:
+			elif line == AleEvents.KEYWORD:
+				if not ale_heading or not ale_columns:
+					raise ValueError(f"Encountered entries list before header data on line {idx+1}")
 				ale_events = AleEvents._from_parser(parser, columns=ale_columns)
 
 			else:
@@ -197,3 +204,7 @@ class Ale:
 		return "\n".join([
 			str(self.heading), str(self.columns), str(self.events)
 		])
+	
+	def __iter__(self):
+		return iter(self.events)
+	
