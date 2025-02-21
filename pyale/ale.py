@@ -20,13 +20,13 @@ class AleHeading(collections.UserDict):
 		return cls(cls.DEFAULT_FILM)
 	
 	@classmethod
-	def _from_parser(cls, parser:typing.Iterable):
+	def _from_parser(cls, parser:typing.Iterable[tuple[int,str]], stop:list[str]):
 
 		ale_heading = cls()
 
 		for idx, line in parser:
 			
-			if not line:
+			if line in stop:
 				break
 			
 			heading_line = line.split('\t')
@@ -50,6 +50,20 @@ class AleColumns(collections.UserList):
 	KEYWORD = "Column"
 	"""ALE Keyword signifying the beginning of the column headers definition"""
 
+	def __init__(self, *args, **kwargs):
+		super().__init__(*args, **kwargs)
+
+		self._with_trailing_tab = True
+
+	@property
+	def with_trailing_tab(self) -> bool:
+		"""Should the ALE columns end with a trailing tab character"""
+		return self._with_trailing_tab
+	
+	@with_trailing_tab.setter
+	def with_trailing_tab(self, use_trailing_tab:bool):
+		self._with_trailing_tab = bool(use_trailing_tab)
+
 	@classmethod
 	def default_columns(cls):
 
@@ -61,16 +75,22 @@ class AleColumns(collections.UserList):
 		])
 	
 	@classmethod
-	def _from_parser(cls, parser:typing.Iterable):
+	def _from_parser(cls, parser:typing.Iterable[tuple[int,str]], stop:list[str]):
 
 		ale_columns = cls()
 
 		for idx, line in parser:
-			if not line:
+			if line in stop:
 				if not ale_columns:
 					raise ValueError(f"Line {idx+1}: Encountered unexpected empty line before ALE columns")
 				else:
 					break
+
+			if line.endswith("\t"):
+				ale_columns.with_trailing_tab = True
+				line = line[:-1]
+			else:
+				ale_columns.with_trailing_tab = False
 
 			ale_columns.extend(line.split('\t'))
 		
@@ -78,7 +98,9 @@ class AleColumns(collections.UserList):
 	
 	def __str__(self) -> str:
 		output = self.KEYWORD + "\n"
-		output += "\t".join(str(col) for col in self) + "\t"
+		output += "\t".join(str(col) for col in self)
+		if self.with_trailing_tab:
+			output += "\t"
 		output += "\n"
 		return output
 
@@ -88,17 +110,6 @@ class AleEvents(collections.UserList):
 
 	KEYWORD = "Data"
 	"""ALE Keyword signifying the beginning of the events list"""
-
-	def __init__(self, events, columns:typing.Optional[AleColumns]=None):
-
-		super().__init__(events)
-
-		if isinstance(events, self.__class__):
-			self._columns = AleColumns([col for col in events.columns])
-		elif columns:
-			self._columns = AleColumns([col for col in columns])
-		else:
-			self._columns = AleColumns.default_columns()
 		
 	def _pad_event(self, event):
 		cols = len(self.columns)
@@ -112,50 +123,78 @@ class AleEvents(collections.UserList):
 		return output
 	
 	@property
-	def columns(self) -> AleColumns:
-		return self._columns
+	def columns(self) -> list[str]:
+		unique_columns = set()
+		for event in self:
+			[unique_columns.add(col) for col in event.columns]
+			
+		return list(unique_columns)
 
 
 	@classmethod
-	def _from_parser(cls, parser:typing.Iterable, columns:AleColumns):
+	def _from_parser(cls, parser:typing.Iterable[tuple[int,str]], columns:AleColumns):
 
 		ale_events = list()
 
 		for idx, line in parser:
 			if not line:
 				break
-
+			
+			# If column headers line had a trailing tab, ensure the entries did too
+			# We'll strip it off and catch a mismatch it later when we check field count
+			if columns.with_trailing_tab and line.endswith("\t"):
+				line = line[:-1]
+			
 			fields = line.split('\t')
 
 			if not len(fields) == len(columns):
 				raise ValueError(f"Line {idx+2}: Found {len(fields)} fields but expected {len(columns)}")
 			
-			ale_events.append(fields)
+			ale_events.append(AleEvent(zip(columns, fields)))
 		
-		return cls(ale_events, columns=columns)
+		return cls(ale_events)
+
+class AleEvent(collections.UserDict):
+	"""An ALE Event contains all fields defined for an event"""
+
+	@property
+	def columns(self) -> list[str]:
+		return list(self.keys())
 	
-	def __iter__(self):
-		return iter({col: str(event[idx]) for idx, col in enumerate(self.columns)} for event in self.data)
+	def __setitem__(self, key, item):
+
+		key  = str(key)
+		item = str(item)
+
+		if not key.strip():
+			# Column name needs to be reasonable
+			raise ValueError("Column name must not be empty or purely whitespace")
+		if not item.strip():
+			# Simply ignore empty values; do not add them
+			return
+
+		return super().__setitem__(key, item)
 
 class Ale:
 	"""An Avid Log Exchange"""
 
-	def __init__(self, *, ale_heading:typing.Optional[AleHeading]=None, ale_columns:typing.Optional[AleColumns]=None, ale_events:typing.Optional[AleEvents]=None):
+	def __init__(self, *, heading:typing.Optional[AleHeading]=None, columns:typing.Optional[AleColumns]=None, events:typing.Optional[AleEvents]=None):
 		
-		self._heading    = AleHeading(ale_heading) or AleHeading.default_heading()
-		self._ale_events = AleEvents(ale_events) if ale_events else AleEvents(columns=ale_columns)
+		self._heading = AleHeading(heading) or AleHeading.default_heading()
+		self._columns = AleColumns(columns) if columns is not None else AleColumns.default_columns()
+		self._events  = AleEvents(events)   if events  is not None else AleEvents([])
 
 	@property
-	def heading(self):
+	def heading(self) -> AleHeading:
 		return self._heading
 	
 	@property
-	def columns(self):
-		return self._ale_events.columns
+	def columns(self) -> AleColumns:
+		return self._columns
 	
 	@property
 	def events(self) -> AleEvents:
-		return self._ale_events
+		return self._events
 	
 	@classmethod
 	def from_path(cls, file_path:str):
@@ -168,7 +207,7 @@ class Ale:
 	def from_stream(cls, file_stream:typing.TextIO):
 		"""Load an ALE from a text-based input stream"""
 
-		parser = enumerate(l.rstrip("\t\n") for l in file_stream.readlines())
+		parser = enumerate(l.rstrip("\n") for l in file_stream.readlines())
 
 		ale_heading = None
 		ale_columns = None
@@ -179,12 +218,12 @@ class Ale:
 			if line == AleHeading.KEYWORD:
 				if ale_heading:
 					raise ValueError(f"Encountered duplicate Header definition on line {idx+1}")
-				ale_heading = AleHeading._from_parser(parser)
+				ale_heading = AleHeading._from_parser(parser, stop=["",AleColumns.KEYWORD])
 			
 			elif line == AleColumns.KEYWORD:
 				if not ale_heading:
 					raise ValueError(f"Encountered Column definition before Heading on line {idx+1}")
-				ale_columns = AleColumns._from_parser(parser)
+				ale_columns = AleColumns._from_parser(parser, stop=["",AleEvents.KEYWORD])
 			
 			elif line == AleEvents.KEYWORD:
 				if not ale_heading or not ale_columns:
@@ -194,7 +233,7 @@ class Ale:
 			else:
 				raise ValueError(f"Unexpected content on line {idx + 1}: {line}")
 		
-		return cls(ale_heading=ale_heading, ale_events=ale_events)
+		return cls(heading=ale_heading, columns=ale_columns, events=ale_events)
 	
 	def __repr__(self) -> str:
 		return f"<ALE {self.heading} {len(self.columns)} Columns; {len(self.events)} Events>"
@@ -207,4 +246,3 @@ class Ale:
 	
 	def __iter__(self):
 		return iter(self.events)
-	
