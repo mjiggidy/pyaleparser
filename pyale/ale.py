@@ -108,6 +108,13 @@ class AleColumns(collections.UserList):
 class AleEvents(collections.UserList):
 	"""A list of ALE events"""
 
+	def __init__(self, initlist=None):
+		
+		if initlist and not all(self._is_valid_item(event) for event in initlist):
+			raise TypeError("The events list only accepts objects of type `AleEvent`")
+		
+		return super().__init__(initlist)
+
 	KEYWORD = "Data"
 	"""ALE Keyword signifying the beginning of the events list"""
 		
@@ -115,12 +122,12 @@ class AleEvents(collections.UserList):
 		cols = len(self.columns)
 		return event[:cols] + [""] * (cols - len(event))
 	
-	def __str__(self) -> str:
-		output = "Data\n"
-		for event in self.data:
-			output += "\t".join(self._pad_event(event)) + "\t\n"
-		
-		return output
+	#def __str__(self) -> str:
+	#	output = "Data\n"
+	#	for event in self.data:
+	#		output += "\t".join(self._pad_event(event)) + "\t\n"
+	#	
+	#	return output
 	
 	@property
 	def columns(self) -> list[str]:
@@ -153,6 +160,29 @@ class AleEvents(collections.UserList):
 			ale_events.append(AleEvent(zip(columns, fields)))
 		
 		return cls(ale_events)
+	
+	def extend(self, other):
+		
+		# Only allow `AleEvent`s
+		if not all(self._is_valid_item(event) for event in other):
+			raise TypeError("The events list only accepts objects of type `AleEvent`")
+		
+		return super().extend(other)
+	
+	def append(self, item):
+
+		# Only allow `AleEvent`
+		if not self._is_valid_item(item):
+			raise TypeError("The events list only accepts objects of type `AleEvent`")
+		
+		return super().append(item)
+	
+	# TODO: Still need more like __add__, __iadd__
+	
+	def _is_valid_item(self, other) -> bool:
+		"""Validate a list item on add"""
+
+		return isinstance(other, AleEvent)
 
 class AleEvent(collections.UserDict):
 	"""An ALE Event contains all fields defined for an event"""
