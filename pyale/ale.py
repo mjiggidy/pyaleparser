@@ -79,7 +79,7 @@ class AleColumns(collections.UserList):
 	
 	def to_formatted_string(self) -> str:
 		"""Format for ALE"""
-		return self.KEYWORD + "\n" + ("\t".join(str(col) for col in self))
+		return self.KEYWORD + "\n" + ("\t".join(str(col) for col in self)) + "\t"
 
 
 class AleEvents(collections.UserList):
@@ -94,34 +94,32 @@ class AleEvents(collections.UserList):
 
 	KEYWORD = "Data"
 	"""ALE Keyword signifying the beginning of the events list"""
-		
-	def _pad_event(self, event):
-		cols = len(self.columns)
-		return event[:cols] + [""] * (cols - len(event))
 	
-	def to_formatted_string(self) -> str:
+	def to_formatted_string(self, columns:typing.Optional[AleColumns]=None) -> str:
 		"""Format for ALE"""
+
+		columns = self.columns if columns is None else columns
+
 		output = self.KEYWORD + "\n"
-		for event in self.data:
-			output += "\t".join(self._pad_event(event)) + "\t\n"		
+		output += "\n".join([(event.to_formatted_string(columns=columns) + "\t") for event in self])
 		return output
 	
 	@property
-	def columns(self) -> list[str]:
+	def columns(self) -> AleColumns[str]:
 		unique_columns = set()
 		for event in self:
 			[unique_columns.add(col) for col in event.columns]
 			
-		return list(unique_columns)
+		return AleColumns(unique_columns)
 
 
 	@classmethod
-	def _from_parser(cls, parser:typing.Iterable[tuple[int,str]], columns:AleColumns, has_trailing_tabs:bool):
+	def _from_parser(cls, parser:typing.Iterable[tuple[int,str]], columns:AleColumns, has_trailing_tabs:bool, stop:list[str]):
 
 		ale_events = list()
 
 		for idx, line in parser:
-			if not line:
+			if line in stop:
 				break
 			
 			# If column headers line had a trailing tab, ensure the entries did too
@@ -153,6 +151,14 @@ class AleEvents(collections.UserList):
 			raise TypeError("The events list only accepts objects of type `AleEvent`")
 		
 		return super().append(item)
+	
+	def insert(self, i, item):
+		
+		# Only allow `AleEvent`
+		if not self._is_valid_item(item):
+			raise TypeError("The events list only accepts objects of type `AleEvent`")
+		
+		return super().insert(i, item)
 	
 	def __add__(self, other):
 
@@ -195,13 +201,18 @@ class AleEvent(collections.UserDict):
 			return
 
 		return super().__setitem__(key, item)
+	
+	def to_formatted_string(self, columns:typing.Optional[AleColumns]=None) -> str:
+		"Format to string for ALE"
+		columns = self.columns if columns is None else columns
+		return "\t".join([self.get(col,"") for col in columns])
 
 class Ale:
 	"""An Avid Log Exchange"""
 
 	def __init__(self, *, heading:typing.Optional[AleHeading]=None, columns:typing.Optional[AleColumns]=None, events:typing.Optional[AleEvents]=None):
 		
-		self._heading = AleHeading(heading) or AleHeading.default_heading()
+		self._heading = AleHeading(heading) if heading is not None else AleHeading.default_heading()
 		self._columns = AleColumns(columns) if columns is not None else AleColumns.default_columns()
 		self._events  = AleEvents(events)   if events  is not None else AleEvents([])
 
@@ -216,6 +227,17 @@ class Ale:
 	@property
 	def events(self) -> AleEvents:
 		return self._events
+	
+	def to_path(self, file_path:str):
+		"""Write an ALE to a given path"""
+
+		with open(file_path, "w") as file_stream:
+			self.to_stream(file_stream)
+
+	def to_stream(self, file_stream:typing.TextIO):
+		"""Write an ALE to a text-based file stream"""
+
+		print(self.to_formatted_string(), file=file_stream)
 	
 	@classmethod
 	def from_path(cls, file_path:str):
@@ -256,7 +278,7 @@ class Ale:
 			elif line == AleEvents.KEYWORD:
 				if not ale_heading or not ale_columns:
 					raise ValueError(f"Encountered entries list before header data on line {idx+1}")
-				ale_events = AleEvents._from_parser(parser, columns=ale_columns, has_trailing_tabs=has_trailing_tab)
+				ale_events = AleEvents._from_parser(parser, columns=ale_columns, has_trailing_tabs=has_trailing_tab, stop=[""])
 
 			else:
 				raise ValueError(f"Unexpected content on line {idx + 1}: {line}")
@@ -266,9 +288,12 @@ class Ale:
 	def __repr__(self) -> str:
 		return f"<ALE {self.heading} {len(self.columns)} Columns; {len(self.events)} Events>"
 	
-	def __str__(self) -> str:
+	def to_formatted_string(self) -> str:
+		"""Format as ALE"""
 		return "\n\n".join([
-			str(self.heading), str(self.columns), str(self.events)
+			self.heading.to_formatted_string(),
+			self.columns.to_formatted_string(),
+			self.events.to_formatted_string(columns=self.columns)
 		])
 	
 	def __iter__(self):
