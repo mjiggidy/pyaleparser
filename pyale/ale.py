@@ -177,7 +177,21 @@ class AleEvents(collections.UserList):
 		
 		return super().append(item)
 	
-	# TODO: Still need more like __add__, __iadd__
+	def __add__(self, other):
+
+		# Only allow `AleEvent`
+		if not self._is_valid_item(other):
+			raise TypeError("The events list only accepts objects of type `AleEvent`")
+		
+		return super().__add__(other)
+	
+	def __iadd__(self, other):
+		
+		# Only allow `AleEvent`
+		if not self._is_valid_item(other):
+			raise TypeError("The events list only accepts objects of type `AleEvent`")
+
+		return super().__iadd__(other)
 	
 	def _is_valid_item(self, other) -> bool:
 		"""Validate a list item on add"""
