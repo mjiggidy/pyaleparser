@@ -31,4 +31,4 @@ if __name__ == "__main__":
 		print(USAGE, file=sys.stderr)
 		sys.exit(4)
 	
-	print(f"ALE output to {path_output}")
+	print(f"ALE with {len(ale.columns)} column(s) and {len(ale.events)} event(s) output to {path_output}")
