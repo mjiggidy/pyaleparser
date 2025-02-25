@@ -37,11 +37,9 @@ class AleHeading(collections.UserDict):
 		
 		return ale_heading
 	
-	def __str__(self) -> str:
-		output = self.KEYWORD + "\n"
-		output += '\n'.join(key + '\t' + val for key,val in self.items())
-		output += "\n"
-		return output
+	def to_formatted_string(self) -> str:
+		"""Format for ALE"""
+		return self.KEYWORD + "\n" + ("\n".join(key + "\t" + val for key,val in self.items()))
 
 
 class AleColumns(collections.UserList):
@@ -52,17 +50,6 @@ class AleColumns(collections.UserList):
 
 	def __init__(self, *args, **kwargs):
 		super().__init__(*args, **kwargs)
-
-		self._with_trailing_tab = True
-
-	@property
-	def with_trailing_tab(self) -> bool:
-		"""Should the ALE columns end with a trailing tab character"""
-		return self._with_trailing_tab
-	
-	@with_trailing_tab.setter
-	def with_trailing_tab(self, use_trailing_tab:bool):
-		self._with_trailing_tab = bool(use_trailing_tab)
 
 	@classmethod
 	def default_columns(cls):
@@ -86,23 +73,13 @@ class AleColumns(collections.UserList):
 				else:
 					break
 
-			if line.endswith("\t"):
-				ale_columns.with_trailing_tab = True
-				line = line[:-1]
-			else:
-				ale_columns.with_trailing_tab = False
-
 			ale_columns.extend(line.split('\t'))
 		
 		return ale_columns
 	
-	def __str__(self) -> str:
-		output = self.KEYWORD + "\n"
-		output += "\t".join(str(col) for col in self)
-		if self.with_trailing_tab:
-			output += "\t"
-		output += "\n"
-		return output
+	def to_formatted_string(self) -> str:
+		"""Format for ALE"""
+		return self.KEYWORD + "\n" + ("\t".join(str(col) for col in self))
 
 
 class AleEvents(collections.UserList):
@@ -122,12 +99,12 @@ class AleEvents(collections.UserList):
 		cols = len(self.columns)
 		return event[:cols] + [""] * (cols - len(event))
 	
-	#def __str__(self) -> str:
-	#	output = "Data\n"
-	#	for event in self.data:
-	#		output += "\t".join(self._pad_event(event)) + "\t\n"
-	#	
-	#	return output
+	def to_formatted_string(self) -> str:
+		"""Format for ALE"""
+		output = self.KEYWORD + "\n"
+		for event in self.data:
+			output += "\t".join(self._pad_event(event)) + "\t\n"		
+		return output
 	
 	@property
 	def columns(self) -> list[str]:
@@ -139,7 +116,7 @@ class AleEvents(collections.UserList):
 
 
 	@classmethod
-	def _from_parser(cls, parser:typing.Iterable[tuple[int,str]], columns:AleColumns):
+	def _from_parser(cls, parser:typing.Iterable[tuple[int,str]], columns:AleColumns, has_trailing_tabs:bool):
 
 		ale_events = list()
 
@@ -149,7 +126,7 @@ class AleEvents(collections.UserList):
 			
 			# If column headers line had a trailing tab, ensure the entries did too
 			# We'll strip it off and catch a mismatch it later when we check field count
-			if columns.with_trailing_tab and line.endswith("\t"):
+			if has_trailing_tabs and line.endswith("\t"):
 				line = line[:-1]
 			
 			fields = line.split('\t')
@@ -268,11 +245,18 @@ class Ale:
 				if not ale_heading:
 					raise ValueError(f"Encountered Column definition before Heading on line {idx+1}")
 				ale_columns = AleColumns._from_parser(parser, stop=["",AleEvents.KEYWORD])
+
+				# ALEs produced by Avid tend to have a trailing `\t` at the end of the columns list and entries list.
+				# However, third party ALEs don't always.
+				# Detect it and remove it for parsing purposes.  We'll put it back on output.
+				has_trailing_tab = ale_columns and ale_columns[-1] == ""
+				if has_trailing_tab:
+					ale_columns.pop()
 			
 			elif line == AleEvents.KEYWORD:
 				if not ale_heading or not ale_columns:
 					raise ValueError(f"Encountered entries list before header data on line {idx+1}")
-				ale_events = AleEvents._from_parser(parser, columns=ale_columns)
+				ale_events = AleEvents._from_parser(parser, columns=ale_columns, has_trailing_tabs=has_trailing_tab)
 
 			else:
 				raise ValueError(f"Unexpected content on line {idx + 1}: {line}")
@@ -282,9 +266,8 @@ class Ale:
 	def __repr__(self) -> str:
 		return f"<ALE {self.heading} {len(self.columns)} Columns; {len(self.events)} Events>"
 	
-
 	def __str__(self) -> str:
-		return "\n".join([
+		return "\n\n".join([
 			str(self.heading), str(self.columns), str(self.events)
 		])
 	
