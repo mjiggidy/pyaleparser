@@ -48,8 +48,20 @@ class AleColumns(collections.UserList):
 	KEYWORD = "Column"
 	"""ALE Keyword signifying the beginning of the column headers definition"""
 
-	def __init__(self, *args, **kwargs):
-		super().__init__(*args, **kwargs)
+	def __init__(self, initlist=None):
+
+		if initlist and not all(self._is_valid_item(col) for col in initlist):
+			raise TypeError("The columns list only accepts strings")
+		
+		return super().__init__(initlist)
+	
+	def _is_valid_item(self, col:typing.Any) -> bool:
+
+		if not isinstance(col, str):
+			return False
+		#elif not col.isprintable():
+		#	return False
+		return True
 
 	@classmethod
 	def default_columns(cls):
@@ -181,6 +193,7 @@ class AleEvents(collections.UserList):
 
 		return isinstance(other, AleEvent)
 
+
 class AleEvent(collections.UserDict):
 	"""An ALE Event contains all fields defined for an event"""
 
@@ -206,6 +219,7 @@ class AleEvent(collections.UserDict):
 		"Format to string for ALE"
 		columns = self.columns if columns is None else columns
 		return "\t".join([self.get(col,"") for col in columns])
+
 
 class Ale:
 	"""An Avid Log Exchange"""
@@ -250,7 +264,7 @@ class Ale:
 	def from_stream(cls, file_stream:typing.TextIO):
 		"""Load an ALE from a text-based input stream"""
 
-		parser = enumerate(l.rstrip("\n") for l in file_stream.readlines())
+		parser = enumerate(l.rstrip("\n") for l in file_stream)
 
 		ale_heading = None
 		ale_columns = None
