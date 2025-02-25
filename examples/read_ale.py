@@ -1,5 +1,5 @@
 import sys, pathlib
-import pyale
+import pyaleparser
 
 if __name__ == "__main__":
 
@@ -9,7 +9,7 @@ if __name__ == "__main__":
 
 	for path_ale in sys.argv[1:]:
 		try:
-			ale = pyale.Ale.from_path(path_ale)
+			ale = pyaleparser.Ale.from_path(path_ale)
 		except Exception as e:
 			print(f"Skipping {path_ale}: {e}")
 			continue

@@ -3,5 +3,5 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pyale"
+name = "pyaleparser"
 version = "0.1.0"

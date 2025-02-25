@@ -1,4 +1,4 @@
-from pyale import Ale, AleEvent
+from pyaleparser import Ale, AleEvent
 
 ale = Ale()
 
