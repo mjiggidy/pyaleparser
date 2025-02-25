@@ -13,6 +13,8 @@ if __name__ == "__main__":
 		except Exception as e:
 			print(f"Skipping {path_ale}: {e}")
 			continue
+
+		print(ale.to_formatted_string())
 		
 		print("")
 		print(f"Ale Path:  {path_ale}")
