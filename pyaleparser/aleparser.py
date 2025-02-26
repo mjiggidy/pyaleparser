@@ -20,13 +20,13 @@ class AleHeading(collections.UserDict):
 		return cls(cls.DEFAULT_FILM)
 	
 	@classmethod
-	def _from_parser(cls, parser:typing.Iterable[tuple[int,str]], stop:list[str]):
+	def _from_parser(cls, parser:typing.Iterable[tuple[int,str]]):
 
 		ale_heading = cls()
 
 		for idx, line in parser:
 			
-			if line in stop:
+			if not line:
 				break
 			
 			heading_line = line.split('\t')
@@ -59,8 +59,11 @@ class AleColumns(collections.UserList):
 
 		if not isinstance(col, str):
 			return False
-		#elif not col.isprintable():
-		#	return False
+		
+		# Y'all gon hate me for this
+		elif not col.isprintable():
+			return False
+		
 		return True
 
 	@classmethod
@@ -74,12 +77,12 @@ class AleColumns(collections.UserList):
 		])
 	
 	@classmethod
-	def _from_parser(cls, parser:typing.Iterable[tuple[int,str]], stop:list[str]):
+	def _from_parser(cls, parser:typing.Iterable[tuple[int,str]],):
 
 		ale_columns = cls()
 
 		for idx, line in parser:
-			if line in stop:
+			if not line:
 				if not ale_columns:
 					raise ValueError(f"Line {idx+1}: Encountered unexpected empty line before ALE columns")
 				else:
@@ -126,12 +129,12 @@ class AleEvents(collections.UserList):
 
 
 	@classmethod
-	def _from_parser(cls, parser:typing.Iterable[tuple[int,str]], columns:AleColumns, has_trailing_tabs:bool, stop:list[str]):
+	def _from_parser(cls, parser:typing.Iterable[tuple[int,str]], columns:AleColumns, has_trailing_tabs:bool):
 
 		ale_events = list()
 
 		for idx, line in parser:
-			if line in stop:
+			if not line:
 				break
 			
 			# If column headers line had a trailing tab, ensure the entries did too
@@ -271,28 +274,40 @@ class Ale:
 		ale_events  = None
 
 		for idx, line in parser:
+
+			# NOTE: ALEs produced by Avid have an empty line between each section
+			# I've seen shady third-party ALEs from hacky labs omit the newline
+			# Since we don't have an official spec doc for ALE, I'm siding with Avid
+			# on this one and not supporting a lack of newlines.  Let me know if
+			# this irks you by creating an Issue on GitHub.
 			
 			if line == AleHeading.KEYWORD:
 				if ale_heading:
 					raise ValueError(f"Encountered duplicate Header definition on line {idx+1}")
-				ale_heading = AleHeading._from_parser(parser, stop=["",AleColumns.KEYWORD])
+				ale_heading = AleHeading._from_parser(parser)
 			
 			elif line == AleColumns.KEYWORD:
 				if not ale_heading:
 					raise ValueError(f"Encountered Column definition before Heading on line {idx+1}")
-				ale_columns = AleColumns._from_parser(parser, stop=["",AleEvents.KEYWORD])
+				ale_columns = AleColumns._from_parser(parser)
 
-				# ALEs produced by Avid tend to have a trailing `\t` at the end of the columns list and entries list.
-				# However, third party ALEs don't always.
+				# ALEs produced by Avid have trailing `\t`s at the end of the columns list and each entry.
 				# Detect it and remove it for parsing purposes.  We'll put it back on output.
-				has_trailing_tab = ale_columns and ale_columns[-1] == ""
+				
+				# NOTE: Those third-party ALEs don't always have a trailing `\t` like they should
+				# I'm not supporting the out-of-spec lack of `\t` for now, but I'll leave this 
+				# here, commented, because I suspect this will be an issue eventually.
+				
+				#has_trailing_tab = ale_columns and ale_columns[-1] == ""
+				has_trailing_tab = True
+				
 				if has_trailing_tab:
 					ale_columns.pop()
 			
 			elif line == AleEvents.KEYWORD:
 				if not ale_heading or not ale_columns:
 					raise ValueError(f"Encountered entries list before header data on line {idx+1}")
-				ale_events = AleEvents._from_parser(parser, columns=ale_columns, has_trailing_tabs=has_trailing_tab, stop=[""])
+				ale_events = AleEvents._from_parser(parser, columns=ale_columns, has_trailing_tabs=has_trailing_tab)
 
 			else:
 				raise ValueError(f"Unexpected content on line {idx + 1}: {line}")
