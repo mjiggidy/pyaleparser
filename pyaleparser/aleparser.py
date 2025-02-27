@@ -7,11 +7,11 @@ class AleHeading(collections.UserDict):
 	"""ALE Keyword signifying the beginning of the heading data"""
 
 	DEFAULT_FILM = {
-		"FIELD_DELIM":"TABS",
-		"VIDEO_FORMAT":"1080",
-		"FILM_FORMAT":"35mm, 4 perf",
-		"AUDIO_FORMAT":"48khz",
-		"FPS":"24"
+		"FIELD_DELIM"  : "TABS",
+		"VIDEO_FORMAT" : "1080",
+		"FILM_FORMAT"  : "35mm, 4 perf",
+		"AUDIO_FORMAT" : "48khz",
+		"FPS"          : "24"
 	}
 
 	@classmethod
@@ -73,7 +73,8 @@ class AleColumns(collections.UserList):
 			"Name",
 			"Tape",
 			"Start",
-			"Duration"
+			"End",
+			"Source File Name"
 		])
 	
 	@classmethod
