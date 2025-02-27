@@ -50,21 +50,20 @@ class AleColumns(collections.UserList):
 
 	def __init__(self, initlist=None):
 
-		if initlist and not all(self._is_valid_item(col) for col in initlist):
-			raise TypeError("The columns list only accepts strings")
+		if initlist:
+			for col in initlist:
+				self._is_valid_item(col)
 		
 		return super().__init__(initlist)
 	
-	def _is_valid_item(self, col:typing.Any) -> bool:
+	def _is_valid_item(self, col:typing.Any):
 
 		if not isinstance(col, str):
-			return False
+			raise TypeError(f"Column must be a str (got {type(col)})")
 		
 		# Y'all gon hate me for this
 		elif not col.isprintable():
-			return False
-		
-		return True
+			raise TypeError("Column contains invalid characters")
 
 	@classmethod
 	def default_columns(cls):
@@ -103,8 +102,9 @@ class AleEvents(collections.UserList):
 
 	def __init__(self, initlist=None):
 		
-		if initlist and not all(self._is_valid_item(event) for event in initlist):
-			raise TypeError("The events list only accepts objects of type `AleEvent`")
+		if initlist:
+			for event in initlist:
+				self._is_valid_item(event)
 		
 		return super().__init__(initlist)
 
@@ -154,48 +154,37 @@ class AleEvents(collections.UserList):
 	
 	def extend(self, other):
 		
-		# Only allow `AleEvent`s
-		if not all(self._is_valid_item(event) for event in other):
-			raise TypeError("The events list only accepts objects of type `AleEvent`")
+		for event in other:
+			self._is_valid_item(event)
 		
 		return super().extend(other)
 	
 	def append(self, item):
 
-		# Only allow `AleEvent`
-		if not self._is_valid_item(item):
-			raise TypeError("The events list only accepts objects of type `AleEvent`")
-		
+		self._is_valid_item(item)
 		return super().append(item)
 	
 	def insert(self, i, item):
 		
-		# Only allow `AleEvent`
-		if not self._is_valid_item(item):
-			raise TypeError("The events list only accepts objects of type `AleEvent`")
-		
+		self._is_valid_item(item)
 		return super().insert(i, item)
 	
 	def __add__(self, other):
 
-		# Only allow `AleEvent`
-		if not self._is_valid_item(other):
-			raise TypeError("The events list only accepts objects of type `AleEvent`")
-		
+		self._is_valid_item(other)
 		return super().__add__(other)
 	
 	def __iadd__(self, other):
 		
-		# Only allow `AleEvent`
-		if not self._is_valid_item(other):
-			raise TypeError("The events list only accepts objects of type `AleEvent`")
+		self._is_valid_item(other)
 
 		return super().__iadd__(other)
 	
-	def _is_valid_item(self, other) -> bool:
+	def _is_valid_item(self, other):
 		"""Validate a list item on add"""
 
-		return isinstance(other, AleEvent)
+		if not isinstance(other, AleEvent):
+			TypeError("The events list only accepts objects of type `AleEvent`")
 
 
 class AleEvent(collections.UserDict):
