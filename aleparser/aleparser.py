@@ -58,13 +58,17 @@ class AleColumns(collections.UserList):
 		return super().__init__(initlist)
 	
 	def _is_valid_item(self, col:typing.Any):
+		from . import exceptions
 
 		if not isinstance(col, str):
 			raise TypeError(f"Column must be a str (got {type(col)})")
 		
 		# Y'all gon hate me for this
+		#
+		# TODO: Most common is an \x07 character produced by a particular PHP-based ALE generator
+		# which Avid gracefully handles as interpuncts... need to think about this
 		elif not col.isprintable():
-			raise TypeError("Column contains invalid characters")
+			raise exceptions.AleInvalidCharacterError(f"Column contains invalid character")
 
 	@classmethod
 	def default_columns(cls):
@@ -83,12 +87,16 @@ class AleColumns(collections.UserList):
 		ale_columns = cls()
 
 		for idx, line in parser:
+
 			if line == stop:
 				if not ale_columns:
 					raise ValueError(f"Line {idx+1}: Encountered unexpected empty line before ALE columns")
 				else:
 					return ale_columns
-
+			
+			elif ale_columns:
+				raise ValueError(f"Line {idx+1}: Unexpected value after columns definition")
+			
 			ale_columns.extend(line.split('\t'))
 		
 		raise EOFError(f"File ended before {stop} was encountered")
