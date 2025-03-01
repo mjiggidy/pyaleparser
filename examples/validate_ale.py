@@ -1,5 +1,5 @@
 import sys, pathlib
-from pyaleparser import Ale
+from aleparser import Ale
 
 USAGE = f"Usage: {pathlib.Path(__file__).name} input_file.ale [another.ale ...]"
 
